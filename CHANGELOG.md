@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Check proxy readiness independently of runtime import and the service-start promise. A service that becomes ready can now open Cobalt even when the API call hangs or rejects.
+- Add regression coverage for hanging/rejected startup with a healthy proxy and for stale startup completion during a retry. Preserve the public preview's privacy changes and overall deadline.
+
+The readiness race was reproduced in a simulated runtime. Physical-TV validation of this public preview remains pending.
+
 ## v2.1.1-rc.1 — community preview
 
 - Bound the whole launch attempt to 30 seconds, including runtime import, service startup, readiness and app-launch callbacks.

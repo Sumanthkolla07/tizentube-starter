@@ -44,16 +44,27 @@ test('hung runtime import also times out',async()=>{
 test('late service completion cannot launch or overwrite a newer retry',async()=>{
  const old=deferred();const p=boot({start:state=>state.starts===1?old.promise:new Promise(()=>{})});
  await p.advance(30000);p.key(13);await p.advance(0);
- p.state.health=true;old.resolve();await p.advance(0);
+ old.resolve();await p.advance(0);
  assert.equal(p.state.launches,0);assert.equal(p.context.busy,true);
- await p.advance(30000);assert.match(p.status.textContent,/timed out/i);
+ p.state.health=true;await p.advance(1000);
+ assert.equal(p.state.launches,1);assert.equal(p.state.exits,1);
+});
+test('ready proxy opens Cobalt even when service start never settles',async()=>{
+ const p=boot({start:state=>{state.health=true;return new Promise(()=>{})}});
+ await p.advance(1000);
+ assert.equal(p.state.starts,1);assert.equal(p.state.launches,1);assert.equal(p.state.exits,1);
+});
+test('ready proxy opens Cobalt despite a rejected service-start request',async()=>{
+ const p=boot({start:state=>{state.health=true;return Promise.reject(new Error('API rejected'))}});
+ await p.advance(1000);
+ assert.equal(p.state.launches,1);assert.equal(p.state.exits,1);
 });
 test('existing proxy opens Cobalt without starting another service',async()=>{
  const p=boot({health:true});await p.advance(500);
  assert.equal(p.state.loads,0);assert.equal(p.state.launches,1);assert.equal(p.state.exits,1);
 });
 test('successful service start waits for readiness then opens and exits',async()=>{
- const p=boot({start:state=>{state.health=true;return Promise.resolve()}});await p.advance(500);
+ const p=boot({start:state=>{state.health=true;return Promise.resolve()}});await p.advance(1000);
  assert.equal(p.state.starts,1);assert.equal(p.state.launches,1);assert.equal(p.state.exits,1);
  await p.advance(30000);assert.equal(p.status.textContent,'');
 });

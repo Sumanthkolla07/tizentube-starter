@@ -119,6 +119,9 @@ async function start() {
     if (!isCurrent(attempt)) return;
     if (up) return openTizenTube(attempt);
     status("Starting background service…");
+    // The runtime may start the service without settling its start promise.
+    // Readiness must be observed independently of both import and startup.
+    waitForProxy(attempt);
     var runtime = await import("wrt:service");
     if (!isCurrent(attempt)) return;
     if (typeof runtime.Service === "function") {
@@ -133,10 +136,10 @@ async function start() {
     }
     if (!isCurrent(attempt)) return;
     status("Waiting for background service…");
-    waitForProxy(attempt);
   } catch (e) {
-    fail(attempt, "Service start failed: " + (e.message || e),
-      "Couldn’t start the background service. Press OK to retry, or restart the TV.");
+    if (isCurrent(attempt)) status("Service-start request failed: " + (e.message || e));
+    // An API rejection does not prove the service failed to start. Keep the
+    // readiness check running until it succeeds or the overall deadline fires.
   }
 }
 
