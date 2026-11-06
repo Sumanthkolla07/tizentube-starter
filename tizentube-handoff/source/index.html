@@ -42,10 +42,13 @@ var statusEl = document.getElementById("status");
 var startedAt = Date.now();
 var busy = false;
 var serviceHandle = null;
-function status(text) {
+var attemptSerial = 0;
+var activeAttempt = 0;
+var startupTimer = null;
+function status(text, displayText) {
   var seconds = ((Date.now() - startedAt) / 1000).toFixed(1);
   document.body.classList.toggle("failed", !busy);
-  statusEl.textContent = busy ? "" : "Couldn’t open YouTube. Press OK to try again.";
+  statusEl.textContent = busy ? "" : (displayText || "Couldn’t open YouTube. Press OK to try again.");
   try { localStorage.setItem("lastStartup", JSON.stringify({ message: text, elapsedSeconds: seconds, method: "wrt:service" })); } catch (e) {}
 }
 
@@ -59,56 +62,92 @@ function proxyAnswers() {
   );
 }
 
-function openTizenTube() {
+function isCurrent(attempt) {
+  return busy && activeAttempt === attempt;
+}
+
+function fail(attempt, detail, displayText) {
+  if (!isCurrent(attempt)) return;
+  clearTimeout(startupTimer);
+  busy = false;
+  activeAttempt = 0;
+  status(detail, displayText);
+}
+
+function openTizenTube(attempt) {
+  if (!isCurrent(attempt)) return;
   status("Opening TizenTube…");
   tizen.application.launch(APP, function () {
-    setTimeout(function () { tizen.application.getCurrentApplication().exit(); }, 500);
+    if (!isCurrent(attempt)) return;
+    clearTimeout(startupTimer);
+    setTimeout(function () {
+      if (isCurrent(attempt)) tizen.application.getCurrentApplication().exit();
+    }, 500);
   }, function (e) {
-    busy = false;
-    status("Could not open TizenTube: " + e.message);
+    fail(attempt, "Could not open TizenTube: " + e.message,
+      "Couldn’t open TizenTube. Check that Cobalt is installed, then press OK to retry.");
   });
 }
 
-function waitForProxy(startedAt) {
+function waitForProxy(attempt) {
+  if (!isCurrent(attempt)) return;
   proxyAnswers().then(function (up) {
-    if (up) return openTizenTube();
-    if (Date.now() - startedAt > TIMEOUT_MS) {
-      busy = false;
-      status("TizenTube's service did not start. Press OK to try again.");
-      return;
-    }
-    setTimeout(function () { waitForProxy(startedAt); }, 300);
+    if (!isCurrent(attempt)) return;
+    if (up) return openTizenTube(attempt);
+    setTimeout(function () { waitForProxy(attempt); }, 300);
+  }, function (e) {
+    fail(attempt, "Proxy check failed: " + (e.message || e),
+      "Couldn’t check the background service. Press OK to retry, or restart the TV.");
   });
 }
 
 async function start() {
   if (busy) return;
   busy = true;
+  var attempt = ++attemptSerial;
+  activeAttempt = attempt;
   startedAt = Date.now();
+  // Bound import, service start, readiness, and the app-launch callback together.
+  // The runtime start API cannot be cancelled; attempt IDs ignore late results.
+  startupTimer = setTimeout(function () {
+    fail(attempt, "Startup timed out after 30 seconds.",
+      "Startup timed out. Press OK to retry, or restart the TV.");
+  }, TIMEOUT_MS);
   status("Starting TizenTube…");
   try {
-    if (await proxyAnswers()) return openTizenTube();
+    var up = await proxyAnswers();
+    if (!isCurrent(attempt)) return;
+    if (up) return openTizenTube(attempt);
     status("Starting background service…");
     var runtime = await import("wrt:service");
+    if (!isCurrent(attempt)) return;
     if (typeof runtime.Service === "function") {
       serviceHandle = new runtime.Service(SERVICE);
       await serviceHandle.start();
     } else if (typeof runtime.startService === "function") {
       await runtime.startService(SERVICE);
     } else {
-      throw new Error("This TV does not expose the newer service API");
+      fail(attempt, "This TV does not expose the newer service API",
+        "This TV’s service API is unavailable. Check the compatibility guide before retrying.");
+      return;
     }
+    if (!isCurrent(attempt)) return;
     status("Waiting for background service…");
-    waitForProxy(Date.now());
+    waitForProxy(attempt);
   } catch (e) {
-    busy = false;
-    status("Service start failed: " + (e.message || e) + ". Press OK to retry.");
+    fail(attempt, "Service start failed: " + (e.message || e),
+      "Couldn’t start the background service. Press OK to retry, or restart the TV.");
   }
 }
 
 document.addEventListener("keydown", function (e) {
   if (e.keyCode === 13) start();          // OK: retry
-  if (e.keyCode === 10009) tizen.application.getCurrentApplication().exit(); // Back: quit
+  if (e.keyCode === 10009) {              // Back: quit and ignore late results
+    clearTimeout(startupTimer);
+    activeAttempt = 0;
+    busy = false;
+    tizen.application.getCurrentApplication().exit();
+  }
 });
 
 start();

@@ -1,5 +1,16 @@
 # Changelog
 
+## v2.1.1-rc.1 — community preview
+
+- Bound the whole launch attempt to 30 seconds, including runtime import, service startup, readiness and app-launch callbacks.
+- Restore retry after timeout and ignore late results after timeout, retry or Back.
+- Add actionable startup failure messages and regression tests.
+- Complete desktop installer/signing guidance and separate ordinary checks from advanced diagnostics.
+- Add pinned, read-only Ubuntu/macOS/Windows CI checks and clean-kit rebuild verification.
+- Derive package names from the widget version and isolate downloads by release version.
+
+Physical-TV validation remains pending; this release is a preview.
+
 ## v2.1.0-rc.1 — community preview
 
 - Rewrite installation, troubleshooting and developer documentation for reuse.

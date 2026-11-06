@@ -8,10 +8,14 @@ First check TV power, current address, and network reachability. Do not diagnose
 | TV API and developer bridge unreachable | Check current IP, power, network, Developer Mode and installer host address. |
 | Port 8101 refuses connections | Proxy is not listening. Changing DNS cannot start a stopped service. |
 | Port 8101 answers but hostname requests hang | Investigate upstream DNS/network independently of service startup. |
-| Starter displays retry message | Press OK to retry; Back exits. Record the Tizen version and error without viewing logs. |
+| Startup timed out | The whole launch attempt exceeded 30 seconds. Press OK to retry; if repeated, fully restart the TV and confirm both packages remain installed. The prior API operation may still finish, but its late result is ignored by Starter. |
+| Couldn’t open TizenTube | Confirm official Cobalt is installed under its original app ID; press OK after correcting the install. |
+| Service API unavailable / couldn’t start background service | Check the actual Tizen version against compatibility limits; use Back to exit or restart before another attempt. |
 | Another proxy already owns 8101 | Restart and identify the listener; official and Starter services can race. |
 | Author certificate mismatch | Reuse the signing identity, or deliberately reinstall after considering saved-data loss. |
 | Modern service API unavailable | Report the actual Tizen version. There is no verified legacy fallback. |
+
+See [ordinary and advanced verification](COMPATIBILITY.md#device-checklist) for optional port, endpoint and metadata-only file checks.
 
 Starter stores its last startup status and elapsed time in its local storage as `lastStartup`. Its method label does not prove which runtime branch executed, especially if a proxy was already running.
 

@@ -5,16 +5,18 @@ from pathlib import Path
 import subprocess
 import sys
 import zipfile
+import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = 'v2.1.0-rc.1'
+WIDGET_VERSION = ET.parse(ROOT / 'tizentube-handoff/source/config.xml').getroot().attrib['version']
+VERSION = f'v{WIDGET_VERSION}-rc.1'
 ROOT_FILES = {'README.md', 'LICENSE', 'ATTRIBUTION.md', 'SECURITY.md', 'CONTRIBUTING.md', 'CHANGELOG.md', '.gitignore'}
 PREFIXES = ('docs/', 'scripts/', 'tests/', 'vendor/', '.github/', 'tizentube-handoff/source/')
 
 def make_kit():
-    dist = ROOT / 'dist'
-    dist.mkdir(exist_ok=True)
-    package = dist / 'TizenTubeStarter-2.1.0.wgt'
+    dist = ROOT / 'dist' / VERSION
+    dist.mkdir(parents=True, exist_ok=True)
+    package = dist / f'TizenTubeStarter-{WIDGET_VERSION}.wgt'
     subprocess.run([sys.executable, str(ROOT / 'tizentube-handoff/build.py')], check=True)
     package.write_bytes((ROOT / 'tizentube-handoff/packages' / package.name).read_bytes())
     tracked = subprocess.check_output(['git', '-C', str(ROOT), 'ls-files', '-z']).decode().split('\0')
