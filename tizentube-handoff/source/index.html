@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>TizenTube Starter</title>
+<style>
+  html, body { margin: 0; width: 100%; height: 100%; background: #0f0f0f; }
+  body { color: #eee; display: flex; align-items: center; justify-content: center;
+         font-family: Arial, sans-serif; }
+  main { display: flex; flex-direction: column; align-items: center; text-align: center; }
+  .logo-panel { width: 420px; }
+  .logo { width: 100%; height: auto; display: block; }
+  .loader { width: 180px; height: 2px; margin-top: 32px; background: #292929;
+            overflow: hidden; border-radius: 2px; }
+  .loader::before { content: ""; display: block; width: 50px; height: 100%; background: #bbb;
+                    animation: loading 1.4s ease-in-out infinite; }
+  #status { display: none; max-width: 700px; font-size: 26px; line-height: 1.5; margin-top: 24px; }
+  body.failed .loader { display: none; }
+  body.failed #status { display: block; }
+  @keyframes loading { from { transform: translateX(-50px); } to { transform: translateX(180px); } }
+  @media (prefers-reduced-motion: reduce) { .loader::before { animation: none; transform: translateX(65px); } }
+</style>
+</head>
+<body>
+<main aria-label="Opening YouTube">
+  <div class="logo-panel"><img class="logo" src="youtube.svg" alt="" style="width:80px;margin:0 auto 20px"><div style="font-size:42px;font-weight:bold">TizenTube Starter</div></div>
+  <div class="loader" aria-hidden="true"></div>
+  <div id="status" role="status" aria-live="polite"></div>
+</main>
+<script>
+// Makes sure TizenTube's proxy is running on port 8101, then opens TizenTube.
+// Direct service startup failed on the recorded QN85C/Tizen 9 setup.
+// This package carries its own service; cross-package startup is restricted.
+// Preserve upstream Cobalt's loopback proxy address. Other TVs need validation.
+"use strict";
+var SERVICE = tizen.application.getCurrentApplication().appInfo.packageId + ".ProxyService";
+var APP = "xvvl3S1TT1.TizenTubeStandalone";
+var PROXY = "http://127.0.0.2:8101/__tthealth";
+var TIMEOUT_MS = 30000;
+
+var statusEl = document.getElementById("status");
+var startedAt = Date.now();
+var busy = false;
+var serviceHandle = null;
+function status(text) {
+  var seconds = ((Date.now() - startedAt) / 1000).toFixed(1);
+  document.body.classList.toggle("failed", !busy);
+  statusEl.textContent = busy ? "" : "Couldn’t open YouTube. Press OK to try again.";
+  try { localStorage.setItem("lastStartup", JSON.stringify({ message: text, elapsedSeconds: seconds, method: "wrt:service" })); } catch (e) {}
+}
+
+function proxyAnswers() {
+  // no-cors: the reply is opaque, but the promise only resolves if something answered on 8101.
+  var controller = new AbortController();
+  var timer = setTimeout(function () { controller.abort(); }, 1500);
+  return fetch(PROXY, { mode: "no-cors", cache: "no-store", signal: controller.signal }).then(
+    function () { clearTimeout(timer); return true; },
+    function () { clearTimeout(timer); return false; }
+  );
+}
+
+function openTizenTube() {
+  status("Opening TizenTube…");
+  tizen.application.launch(APP, function () {
+    setTimeout(function () { tizen.application.getCurrentApplication().exit(); }, 500);
+  }, function (e) {
+    busy = false;
+    status("Could not open TizenTube: " + e.message);
+  });
+}
+
+function waitForProxy(startedAt) {
+  proxyAnswers().then(function (up) {
+    if (up) return openTizenTube();
+    if (Date.now() - startedAt > TIMEOUT_MS) {
+      busy = false;
+      status("TizenTube's service did not start. Press OK to try again.");
+      return;
+    }
+    setTimeout(function () { waitForProxy(startedAt); }, 300);
+  });
+}
+
+async function start() {
+  if (busy) return;
+  busy = true;
+  startedAt = Date.now();
+  status("Starting TizenTube…");
+  try {
+    if (await proxyAnswers()) return openTizenTube();
+    status("Starting background service…");
+    var runtime = await import("wrt:service");
+    if (typeof runtime.Service === "function") {
+      serviceHandle = new runtime.Service(SERVICE);
+      await serviceHandle.start();
+    } else if (typeof runtime.startService === "function") {
+      await runtime.startService(SERVICE);
+    } else {
+      throw new Error("This TV does not expose the newer service API");
+    }
+    status("Waiting for background service…");
+    waitForProxy(Date.now());
+  } catch (e) {
+    busy = false;
+    status("Service start failed: " + (e.message || e) + ". Press OK to retry.");
+  }
+}
+
+document.addEventListener("keydown", function (e) {
+  if (e.keyCode === 13) start();          // OK: retry
+  if (e.keyCode === 10009) tizen.application.getCurrentApplication().exit(); // Back: quit
+});
+
+start();
+</script>
+</body>
+</html>

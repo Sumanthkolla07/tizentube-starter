@@ -1,0 +1,18 @@
+# Local setup and secrets
+local/
+.superpowers/
+.DS_Store
+.env
+.env.*
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.pem
+*.key
+*.log
+node_modules/
+__pycache__/
+# Generated release assets
+dist/
+tizentube-handoff/packages/
